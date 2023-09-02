@@ -8,6 +8,18 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width", initial-scale="1">
         <title>집! 콕!</title>
+        <script>
+            function goBack() {
+                window.history.back();
+            }
+            document.addEventListener("DOMContentLoaded", function() {
+                var numValue = {{ num }};
+                if (numValue === 0) {
+                    alert("남은 우편번호가 없습니다. 카테고리를 다시 선택해주세요.");
+                    goBack();
+                }
+            });
+        </script>
     </head>
 
     <style>

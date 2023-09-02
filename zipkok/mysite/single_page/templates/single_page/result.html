@@ -68,7 +68,19 @@
                 width: 48%;
                 margin-bottom: 20px;
             }
-
+            .section {
+            display: none; /* 초기에 숨김 */ 
+            flex-direction: column;
+            align-items: center; /* 가운데 정렬 */
+            margin-right: 30px;
+            }
+            .info-list-2 {
+                display:flex;
+                flex-direction: row;
+                align-items: center;
+                margin-bottom: 30px;
+            }
+            
         </style>
         <nav class="navbar navbar-default">
             <div class="container-fluid">
@@ -92,50 +104,73 @@
                 </div>
             </div>
         </nav>
-
+        
         {% for key, value in result_2.items %}
-    {% for key2, value2 in result_3.items %}
-    {% if key == key2 %}
-    <div class="info-map-container">
-        <ul class="info-list">
-            <li><h3><b>추천우편번호 : {{key}}</b></h3></li>
-            <li>주소 : {{value.city_gu}} {{value.admin_dong}}</li>
-            {% if monf == 0 %}
-                <li>전세 : {{value.avg_cost}}만원</li>
-            {% endif %}
-            {% if monf != 0 %}
-            <li>보증금 : {{mon}}만원</li> 
-            <li>월세 : {% with avg_cost_diff=value.avg_cost|sub:mon %}
-                {% with avg_cost_diff_multiplied=avg_cost_diff|mul:0.052 %}
-                    {% with avg_cost_final=avg_cost_diff_multiplied|div:12 %}
-                        {{ avg_cost_final|floatformat:0 }}만원
-                    {% endwith %}
-                {% endwith %}
-            {% endwith %}
-                </li>
-            {% endif %}
-            <li>총 소요시간 : {{value.totalTime}}분</li>
-            {% if value.walk_sum != 0 %}
-                <li>걷기 : {{value.walk_sum}}분</li>
-            {% endif %}
-            {% if value.bus_sum != 0 %}
-                <li>버스 : {{value.bus_sum}}분</li>
-            {% endif %}
-            {% if value.subway_sum != 0 %}
-                <li>지하철 : {{value.subway_sum}}분</li>
-            {% endif %}
-            
-        </ul>
-        <div><button class="button1" onclick="window.open('{{key}}/', 'image_window', 'width=1000,height=600,location=no,status=no,scrollbars=yes');">관련정보보기</button></div>
-        <br>
-        <div class = "map-container">
-            <div class="map">{{value.map | safe}}</div>
-            <div class="map">{{value2.map2 | safe}}</div>
-        </div>            
-    </div>        
-    {% endif %}
-    {% endfor %}
-    {% endfor %}
+            {% for key2, value2 in result_3.items %}
+                {% for key3, value3 in result_plz.items %}
+                    {% if key == key2 and key2 == key3 %}
+                        
+                        <div class="info-map-container">
+                            <ul class="info-list">   
+                                <li><h3><b>추천우편번호 : {{key}}</b></h3></li>
+                                <li>주소 : {{value.city_gu}} {{value.admin_dong}}</li>
+                                {% if monf == 0 %}
+                                    <li>전세 : {{value.avg_cost}}만원</li>
+                                {% endif %}
+                                {% if monf != 0 %}
+                                <li>보증금 : {{mon}}만원</li> 
+                                <li>월세 : {% with avg_cost_diff=value.avg_cost|sub:mon %}
+                                    {% with avg_cost_diff_multiplied=avg_cost_diff|mul:0.052 %}
+                                        {% with avg_cost_final=avg_cost_diff_multiplied|div:12 %}
+                                            {{ avg_cost_final|floatformat:0 }}만원
+                                        {% endwith %}
+                                    {% endwith %}
+                                {% endwith %}
+                                    </li>
+                                {% endif %}
+                                <li>총 소요시간 : {{value.totalTime}}분</li>
+                                {% if value.walk_sum != 0 %}
+                                    <li>걷기 : {{value.walk_sum}}분</li>
+                                {% endif %}
+                                {% if value.bus_sum != 0 %}
+                                    <li>버스 : {{value.bus_sum}}분</li>
+                                {% endif %}
+                                {% if value.subway_sum != 0 %}
+                                    <li>지하철 : {{value.subway_sum}}분</li>
+                                {% endif %}
+                                
+                            </ul>
+                            <div><button class="button1" onclick="window.open('real_estate', 'image_window', 'width=1000,height=600,location=no,status=no,scrollbars=yes');">주변부동산정보보기</button></div>
+                            <div><button id="toggleButton" data-target="{{ key3 }}">상세정보보기</button></div>
+                            <br>
+                            <div class ="info-list-2" data-key="{{key3}}">
+                                <div id="avg_area_{{ key3 }}" class="section">
+                                    <h3>평균면적</h3>
+                                    <img src="{{value3.cost}}"alt="{{key3}}">   
+                                </div>
+                                <div id="avg_cost_{{ key3 }}" class="section">
+                                    <h3>평균크기</h3>
+                                    <img src="{{value3.size}}" alt="{{key3}}">
+                                </div>
+                                <div id="avg_area_{{ key3 }}" class="section">
+                                    <h3>에베베</h3>
+                                    <img src="{{value3.year}}" alt="{{key3}}">
+                                </div>
+                                <div id="avg_cost_diff_{{ key3 }}" class ="section">
+                                    <h3>오라라</h3>
+                                    <img src="{{value3.ratio}}" alt="{{key3}}">
+                                </div>
+
+                            </div>
+                            <div class = "map-container">
+                                <div class="map">{{value.map | safe}}</div>
+                                <div class="map">{{value2.map2 | safe}}</div>
+                            </div>            
+                        </div>        
+                    {% endif %}
+                {% endfor %}
+            {% endfor %}
+        {% endfor %}
     <footer class="footer-fixed" style="background-color: rgb(64, 154, 206); color: #ffffff">
         <div class="container">
             <br>
@@ -152,14 +187,37 @@
                 var url = key + "/";
                 window.open(url, "image_window", "width=600,height=450,location=no,status=no,scrollbars=yes");
             });
+          
         </script>
         <script>
             function goBack() {
               window.history.back();
             }
         </script>
+        <script>
+    
+        const toggleButtons = document.querySelectorAll('[data-target]');
+        const sections = document.querySelectorAll('.section');
+
+        toggleButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const targetKey = button.getAttribute('data-target');
+                sections.forEach(section => {
+                    const sectionKey = section.parentElement.getAttribute('data-key');
+                    if (sectionKey === targetKey) {
+                        // 해당 버튼과 연결된 정보 섹션만 토글합니다.
+                        if (section.style.display === 'none' || section.style.display === '') {
+                            section.style.display = 'block';
+                        } else {
+                            section.style.display = 'none';
+                        }
+                    }
+                });
+            });
+        });
+
+        </script>                
     </body>
 </html>
-
 
 

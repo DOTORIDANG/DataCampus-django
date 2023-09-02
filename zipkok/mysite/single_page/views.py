@@ -3,7 +3,7 @@ from django.http import HttpResponse
 from django.template import loader
 from rest_framework.decorators import api_view
 from .models import DataEngCsv3
-from .models import DataEngCsv3
+from .models import DataEngCsv4
 from .serializers import TestDataSerializer
 from django.http import JsonResponse
 from .forms import AvgCostForm
@@ -12,11 +12,19 @@ import json
 from django.contrib import messages
 from .models import PlzCategory
 from collections import defaultdict
+from .models import Jido
+
 
 def o3091(request):
     return render(
         request,
         'single_page/03091.html'
+    )
+
+def real_estate(request):
+    return render(
+        request,
+        'single_page/real_estate.html'
     )
 
 def o3106(request):
@@ -62,7 +70,7 @@ def check_and_filter(request):
         for location in selected_location:
             if location in ms:
                 place_code = ms.index(location)
-                latest_list.extend(DataEngCsv3.objects.filter(place_code=place_code))
+                latest_list.extend(DataEngCsv4.objects.filter(place_code=place_code))
 
         latest_list_codes = [item.zipcode for item in latest_list]
         print(latest_list_codes)
@@ -84,7 +92,7 @@ def check_and_filter(request):
         r = 0.052
         j = mon + (monf * 12 / r)
 
-    filtered_one = DataEngCsv3.objects.filter(zipcode__in = latest_list_codes,avg_cost__lte=j)
+    filtered_one = DataEngCsv4.objects.filter(zipcode__in = latest_list_codes,avg_cost__lte=j)
 
     #필터로 넘겨주기 위해 json파일 형태로 직렬화
     filter_1_data = [item.zipcode for item in filtered_one]
@@ -112,7 +120,7 @@ def category(request):
         filter_1_data = json.loads(filter_1_serialized)
 
         # DataEngCsv 모델에서 selected_items에 해당하는 모든 컬럼이 1 이상인 데이터를 추출
-        filtered_data = DataEngCsv3.objects.filter(zipcode__in=filter_1_data, **{f"{item}__gte": 1 for item in selected_items})
+        filtered_data = DataEngCsv4.objects.filter(zipcode__in=filter_1_data, **{f"{item}__gte": 1 for item in selected_items})
 
         filter_2 = {item.zipcode:{'lat':item.lat,'lon':item.lon} for item in filtered_data}
         # 필터로 넘겨주기 위해 json파일 형태로 직렬화
@@ -145,7 +153,7 @@ def final_page(request):
         selected_items = json.loads(selected_items_serialized)
         print(selected_items)
         # 가져온 정보로 다시 검색
-        filtered_data = DataEngCsv3.objects.filter(zipcode__in=filter_1_data,
+        filtered_data = DataEngCsv4.objects.filter(zipcode__in=filter_1_data,
                                                   **{f"{item}__gte": 1 for item in selected_items})
                
         filter_2 = {}
@@ -180,7 +188,7 @@ def final_page(request):
             new_key_2 = f'0{key}'
             new_fac[new_key_2] = value
         
-        #print(len(new_fac)) # 확인용
+        print(len(new_fac)) # 확인용
 
         # 사용자에게 추가정보 받아오기
         destination = str(request.POST.get('destination')) # 목적지
@@ -193,16 +201,26 @@ def final_page(request):
         api_key = "e8wHh2tya84M88aReEpXCa5XTQf3xgo01aZG39k5" 
         
         zip_code_list = list(new_db.keys()) # final_recommend에 들어가는 우편번호의 리스트
-        
+
         # result_2 : final_recommend 함수를 통해 해당 우편번호에서 목적지까지의 경로 및 우편번호의 대략적인 정보 제공       
-        result_2 = final_recommend(new_db,zip_code_list,destination,limit_time, transfer_count, pathtype,api_key)
+        #result_2 = final_recommend(new_db,zip_code_list,destination,limit_time, transfer_count, pathtype,api_key)
+        result_2 = {'03633': {'city_gu': '서울특별시 서대문구','admin_dong': '홍제2동','legal_dong': '홍제동','totalTime': 18,'walk_sum': 4,'bus_sum': 11,'subway_sum': 3,'pathType': 2,'avg_cost':9000}}
+
         # result_3 : facility_map 함수를 통해 해당 우편번호 500m 반경 위치하는 카테고리들의 정보를 지도로 제공
         result_3 = facility_map(new_fac,selected_items)
+
         
-        return render(request,'single_page/result.html',{'result_2' :result_2,'mon':mon,'monf':monf,'result_3':result_3})
+
+        result_plz = draw_graph(last_dict(zip_code_list))
+
+        
+        
+
+        
+        return render(request,'single_page/result.html',{'result_2' :result_2,'mon':mon,'monf':monf,'result_3':result_3,'result_plz':result_plz})
         
     return render(request, 'single_page/input.html')
-    
+
 
 
 # 우편번호에서 목적지까지의 이동 경로 제공하는 함수 모음
@@ -494,8 +512,8 @@ def final_recommend(dataset, zip_code_list, destination, limit_time, transfer_co
         # 이동시간이 적은 순서대로 정렬
         sorted_result = sorted(result.items(), key=lambda item: item[1]['totalTime'])
         # 이동시간이 가장 적은 세개의 우편번호 추천
-        # top_three = sorted_result[:3]
-        # sorted_result = {key:value for key,value in top_three}
+        top_three = sorted_result[:3]
+        sorted_result = {key:value for key,value in top_three}
     except KeyError:
         sorted_result=dict()
     result = dict(sorted_result)
@@ -605,11 +623,25 @@ def facility_map(dict_file,check_list):
     name_book=name_change() # 한국어로 보여주기
     lgd_txt="<span style='color:{col};'>{txt}</span>"
 
-    for zip_code in dict_file.keys(): 
+    for zip_code in dict_file.keys():
         categories=category_list() # 필드명 불러오기
         facility_info=dict_file[zip_code] # 우편번호별 카테고리 정보들 저장
         center=(facility_info['lat'],facility_info['lon']) #해당 우편번호의 중심좌표
         my_map=folium.Map(location=center,zoom_start=15,tiles=None)
+
+        ###우편번호를 그리기 위해 우편번호 경계면 가져오기
+        location = Jido.objects.get(bas_id=zip_code)
+        coordinates = location.coordinates
+        print(coordinates)
+
+        ###위도 경도 원위치
+        def swap_longitude_latitude(coord):
+            return [coord[1], coord[0]]
+
+        # 모든 좌표에 함수 적용
+        swapped_coordinates = [swap_longitude_latitude(coord) for coord in coordinates]
+
+        #
         result[zip_code]=dict()
     #opacity: 지도 배경의 불투명도
         folium.TileLayer('OpenStreetMap',min_zoom=14,max_zoom=18,name=f'{zip_code}',control=False,opacity=0.7).add_to(my_map)
@@ -619,10 +651,20 @@ def facility_map(dict_file,check_list):
         folium.Circle(location=center,radius=500,color='black',fill_color='#008fff',opacity=0.1,fill_opacity=0.2).add_to(fg_center)
     #체크박스(우편번호글씨와 구역화 두개를 한번에 껐다켤수있음)
         fg_zipcode=folium.FeatureGroup(name=lgd_txt.format(col='#696969',txt=f'{zip_code}'))
+    # 폴리곤 그리기
+        folium.Polygon(
+            locations=swapped_coordinates,
+            color='black',  # 라인 색상을 빨간색으로 설정
+            weight=0.5,  # 라인 두께를 두꺼운 것으로 설정
+            fill=True,  # 내부를 채울지 여부
+            fill_color='white',  # 내부 채우기 색상을 투명한 노란색으로 설정
+            fill_opacity=0.5  # 내부 채우기 불투명도 설정
+        ).add_to(fg_zipcode)
     #지도 속 우편번호 글자 조정(font-size: 글자 크기, color: 글자 색)
         folium.Marker(location=center,icon=folium.DivIcon(html=f'<div style="font-size:25px;background-color:rgba(0, 0, 0, 0);color:#696969;">{zip_code}</div>')).add_to(fg_zipcode)
     #만약 중심 넣고 싶으면 radius랑 fill_opacity 수정)
         folium.Circle(location=center,radius=20,color='red',fill_color='blue',fill_opacity=0,opacity=0).add_to(fg_zipcode)
+    #우편번호 그림
         fg_center.add_to(my_map)
         fg_zipcode.add_to(my_map)
         # 사용자에게 선택되지 않은 카테고리들 처리
@@ -694,3 +736,230 @@ def full_name(name,api_key):
         result=result[:2]+'도'+result[2:]
     
     return result
+
+#추가관련정보 함수
+from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import Avg
+from collections import defaultdict
+
+def last_dict(zip_code_list):
+    # 결과를 저장할 딕셔너리 초기화
+    result = defaultdict(dict)
+
+    try:
+        # 전체 데이터의 평균 계산
+        avg_data = DataEngCsv4.objects.aggregate(
+            avg_cost=Avg('avg_cost'),
+            avg_size=Avg('avg_size'),
+            avg_year=Avg('avg_year'),
+            avg_dd=Avg('dd'),
+            avg_yl=Avg('yl'),
+            avg_op=Avg('op')
+        )
+
+        avg_cost_t = avg_data.get('avg_cost')
+        avg_size_t = avg_data.get('avg_size')
+        year_t = avg_data.get('avg_year')
+        ratio_t_dd = avg_data.get('avg_dd')
+        ratio_t_yl = avg_data.get('avg_yl')
+        ratio_t_op = avg_data.get('avg_op')
+
+        for zipcode in zip_code_list:
+            # 우편번호로 데이터 가져오기
+            data = DataEngCsv4.objects.get(zipcode=zipcode)
+
+            # district 정보 추출
+            place_code = data.place_code
+            avg_size_d = DataEngCsv4.objects.filter(place_code=place_code).aggregate(avg_size=Avg('avg_size')).get('avg_size')
+            avg_cost_d = DataEngCsv4.objects.filter(place_code=place_code).aggregate(avg_cost=Avg('avg_cost')).get(
+                'avg_cost')
+            year_d = DataEngCsv4.objects.filter(place_code=place_code).aggregate(avg_year=Avg('avg_year')).get(
+                'avg_year')
+
+            # boundary 정보 추출
+            error_range_size = avg_size_t * 0.05
+            error_range_cost = avg_cost_t * 0.05
+
+            filtered_rows1 = DataEngCsv4.objects.filter(
+                avg_size__gte=data.avg_size - error_range_size,
+                avg_size__lte=data.avg_size + error_range_size,
+            )
+            avg_cost_b = filtered_rows1.aggregate(Avg('avg_cost')).get('avg_cost__avg')
+
+            filtered_rows2 = DataEngCsv4.objects.filter(
+                avg_cost__gte=data.avg_cost - error_range_cost,
+                avg_cost__lte=data.avg_cost + error_range_cost,
+            )
+            avg_size_b = filtered_rows2.aggregate(Avg('avg_size')).get('avg_size__avg')
+
+            # ratio 정보 추출
+            ratio_d_dd = DataEngCsv4.objects.filter(place_code=place_code).aggregate(avg_dd=Avg('dd')).get('avg_dd')
+            ratio_d_yl = DataEngCsv4.objects.filter(place_code=place_code).aggregate(avg_yl=Avg('yl')).get('avg_yl')
+            ratio_d_op = DataEngCsv4.objects.filter(place_code=place_code).aggregate(avg_op=Avg('op')).get('avg_op')
+
+            # 데이터를 딕셔너리에 저장
+            result[zipcode] = {
+                'district': place_code,
+                'size': {
+                    'total': avg_size_t,
+                    'district': avg_size_d,
+                    'boundary': avg_size_b,
+                    'zip': data.avg_size
+                },
+                'cost': {
+                    'total': avg_cost_t,
+                    'district': avg_cost_d,
+                    'boundary': avg_cost_b,
+                    'zip': data.avg_cost
+                },
+                'year': {
+                    'total': year_t,
+                    'district': year_d,
+                    'zip': data.avg_year
+                },
+                'ratio': {
+                    'total': [ratio_t_yl, ratio_t_op, ratio_t_dd],
+                    'district': [ratio_d_yl, ratio_d_op, ratio_d_dd],
+                    'zip': [data.yl, data.op, data.dd]
+                }
+            }
+
+    except ObjectDoesNotExist:
+        # Jido 객체가 없을 때 처리할 내용을 여기에 추가
+        pass
+    except (SyntaxError, ValueError):
+        # 유효하지 않은 coordinates 문자열이거나 변환 중에 오류가 발생한 경우 처리할 내용을 여기에 추가
+        pass
+
+    return dict(result)
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib.patches import FancyBboxPatch
+from matplotlib.patches import Patch
+from io import BytesIO
+import math
+
+#한글 설정
+def plt_korean(default=0):
+    korean_font_path = 'C:/Windows/Fonts/malgun.ttf'
+    plt.rcParams['font.family'] = 'Malgun Gothic'
+    plt.rcParams['font.size'] = 8
+    plt.rcParams['axes.unicode_minus'] = False
+#색함수
+def graphbar_color(default=0):
+    result={'total':'#bdc1c4',0:'#5c96bb',1:'#7db781',2:'#f1c277','boundary':'#86b3b3','zip':'#257e7e'}
+    return result
+def labeling(default=0):
+    result={0:'마포구',1:'서대문구',2:'종로구','size':['면적','(㎡)'],'cost':['가격','(만원)'],'year':['건축년도','년','월'],'ratio':['비율','%'],}
+    return result
+
+# 그래프 그리기
+import base64
+# 그래프 그리기 함수
+def draw_graph(zip_code_dict):
+    result = dict()
+    color_list = graphbar_color()
+    plt_korean()
+    naming = labeling()
+    graph_list = ['size','cost','year','ratio']
+
+    for zip_code in zip_code_dict.keys():
+        result[zip_code] = dict()
+        a = zip_code_dict[zip_code]
+
+        for i in range(len(graph_list)-1):
+            graph = graph_list[i]
+
+            if i <= 1:
+                # 수직 막대 그래프
+                x = ['전체', f"{naming[a['district']]}", f'동일{naming[graph_list[1-i]][0]}대\n(오차 ±5%)', f'{zip_code}']
+                y = list(a[graph].values())
+                color = [color_list['total'], color_list[a['district']], color_list['boundary'], color_list['zip']]
+                plt.figure()
+                plt.bar(x, y, width=0.5, color=color)
+                plt.ylim(y[len(y)-1]/2,)
+                plt.xlabel(f'\n평균 {naming[graph][0]}', fontsize=14)
+                plt.yticks([])
+
+                for j in range(len(x)):
+                    if j == len(x)-1:
+                        plt.text(x[j], y[j] + y[(len(y)-1)]*0.02, str(np.round(y[j],2)) + f'{naming[graph][1]}',
+                                 ha='center', fontsize=13, color=color[j], weight='bold')
+                    else:
+                        plt.text(x[j], y[j] + y[(len(y)-1)]*0.02, str(np.round(y[j],2)) + f'{naming[graph][1]}',
+                                 ha='center', fontsize=13, color=color[j])
+
+            elif i == 2:
+                # 수평 막대 그래프 그리기
+                x = [f'{zip_code}', f"{naming[a['district']]}", '전체']
+                y = list(a[graph].values())
+                y.reverse()
+                color = [color_list['zip'], color_list[a['district']], color_list['total']]
+                plt.figure()
+                plt.barh(x, y, height=0.5, color=color)
+                plt.xlim(y[len(y)-1]-80, 2025)
+                plt.xlabel(f'\n평균 {naming[graph][0]}', fontsize=14)
+                plt.xticks([])
+
+                for j in range(len(x)):
+                    girl, day = divmod(y[j], 1)
+                    girl = int(girl)
+                    if day == 0:
+                        day = 0.15
+
+                    if j == 0:
+                        plt.text(y[j] + y[(len(y)-1)]*0.002, x[j], f'{girl}{naming[graph][1]} {math.floor(day*12)}{naming[graph][2]}',
+                                 va='center', fontsize=13, color=color[j], weight='bold')
+                    else:
+                        plt.text(y[j] + y[(len(y)-1)]*0.002, x[j], f'{girl}{naming[graph][1]} {math.floor(day*12)}{naming[graph][2]}',
+                                 va='center', fontsize=13, color=color[j])
+
+                # 그래프 스타일 설정
+            ax = plt.gca()
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['left'].set_visible(False)
+            ax.spines['bottom'].set_visible(False)
+
+            # 그래프 이미지 저장
+            buf = BytesIO()
+            plt.savefig(buf, format='png', bbox_inches='tight')
+            buf.seek(0)
+            string=base64.b64encode(buf.read())
+            url='data:image/png;base64,'+ quote(string)
+            result[zip_code][graph] = url
+
+        # 주택 유형 비율 그래프
+        graph = graph_list[3]
+        labels = ['단독다가구', '연립다세대', '오피스텔']
+        color_ratio = ['#edb558', '#a1cba3', '#83b6d3']
+        title = {'total':'전체', 'district':f"{naming[a['district']]}", 'zip':f'{zip_code}'}
+        order = ['total', 'district', 'zip']
+        plt.figure()
+        fig, axs = plt.subplots(1, 3)
+
+        for i in range(len(order)):
+            filtered_labels = [labels[j] for j, size in enumerate(a[graph][order[i]]) if size > 0]
+            filtered_sizes = [a[graph][order[i]][j] for j, size in enumerate(a[graph][order[i]]) if size > 0]
+            filtered_colors = [color_ratio[j] for j, size in enumerate(a[graph][order[i]]) if size > 0]
+            axs[i].pie(filtered_sizes, autopct='%1.1f%%', pctdistance=0.68, colors=filtered_colors, wedgeprops=dict(width=0.6))
+            axs[i].set_aspect('equal')
+            axs[i].text(0, -1.4, title[order[i]], ha='center')
+
+        legend_elements = [Patch(facecolor=color, label=label) for color, label in zip(color_ratio, labels)]
+        plt.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(-0.7, -0.15), ncol=len(legend_elements))
+        plt.text(-3, -2.7, '주택 유형 평균 비율', ha='center', va='center', fontsize=16)
+
+        # 그래프 이미지 저장
+        buf = BytesIO()
+        plt.savefig(buf, format='png', bbox_inches='tight')
+        buf.seek(0)
+        string=base64.b64encode(buf.read())
+        url='data:image/png;base64,'+ quote(string)
+        result[zip_code][graph] = url
+
+    return result
+from PIL import Image
+from io import BytesIO
+import base64
+
